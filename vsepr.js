@@ -401,26 +401,15 @@ window.addEventListener("resize", () => {
     renderer.setSize(window.innerWidth - cWidth, window.innerHeight);
 });
 
-let iodine = new Atom("O");
+let iodine = new Atom("I");
 iodine.addTo(scene);
-<<<<<<< HEAD
-// let lp = new LonePair(iodine);
-// lp.addTo(scene);
-let fluorine = new Atom("H");
-=======
 let lp = new LonePair(iodine);
 lp.addTo(scene);
 let fluorine = new Atom("F");
->>>>>>> 670add048c1fd979030b5798cac3d5f170b43f83
 fluorine.addTo(scene);
 fluorine.bond(iodine).addTo(scene);
 fluorine.setVis(1);
 iodine.setVis(1);
-
-let windowsIsSuperior = new Atom("He");
-windowsIsSuperior.addTo(scene);
-windowsIsSuperior.bond(fluorine).addTo(scene);
-windowsIsSuperior.setVis(1);
 
 function animate() {
     requestAnimationFrame(animate);
