@@ -318,11 +318,13 @@ class LonePair {
     }
 }
 
+var cWidth = 350;
+
 var scene = new THREE.Scene();
-var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100000);
+var camera = new THREE.PerspectiveCamera(75, (window.innerWidth - cWidth) / window.innerHeight, 0.1, 100000);
 
 var renderer = new THREE.WebGLRenderer({antialias: true});
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(window.innerWidth - cWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 var controls = new THREE.OrbitControls( camera );
@@ -336,21 +338,26 @@ let light = new THREE.AmbientLight(0x404040); // soft white light
 scene.add(light);
 
 window.addEventListener("resize", () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.aspect = (window.innerWidth - cWidth) / window.innerHeight;
     camera.updateProjectionMatrix();
 
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(window.innerWidth - cWidth, window.innerHeight);
 });
 
-let iodine = new Atom("I");
+let iodine = new Atom("O");
 iodine.addTo(scene);
 // let lp = new LonePair(iodine);
 // lp.addTo(scene);
-let fluorine = new Atom("F");
+let fluorine = new Atom("H");
 fluorine.addTo(scene);
 fluorine.bond(iodine).addTo(scene);
 fluorine.setVis(1);
 iodine.setVis(1);
+
+let windowsIsSuperior = new Atom("He");
+windowsIsSuperior.addTo(scene);
+windowsIsSuperior.bond(fluorine).addTo(scene);
+windowsIsSuperior.setVis(1);
 
 function animate() {
     requestAnimationFrame(animate);
