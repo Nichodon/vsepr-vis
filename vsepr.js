@@ -139,7 +139,7 @@ class Atom {
 
     remove() {
         this.scene.remove(this.mesh);
-        this.scene = null;
+        this.scene = undefined;
     }
 
     updateMeshCoords() {
@@ -157,7 +157,14 @@ class Atom {
         this.lone_pairs.forEach(pair => pair.updateMeshCoords());
     }
 
+    isBonded(atom) {
+        return this.bonds.some(bond => bond.p2 === atom) || atom.bonds.some(bond => bond.p1 === this);
+    }
+
     bond(atom, type="-") {
+        if (this.isBonded(atom))
+            return;
+
         let bond = new Bond(this, atom, type);
 
         this.bonds.push(bond);
@@ -167,8 +174,44 @@ class Atom {
         return bond;
     }
 
+    disconnect(atom) {
+        if (!this.isBonded(atom))
+            return;
+
+        for (let i = 0; i < this.bonds.length; i++) {
+            let bond = this.bonds[i];
+            if (bond.p1 === atom || bond.p2 === atom) {
+                bond.destroy();
+                this.bonds.splice(i);
+                return;
+            }
+        }
+
+        atom.disconnect(this);
+    }
+
     calculateBonds() {
         this.bonds.forEach(bond => bond.calcP2());
+    }
+
+    addLonePair() {
+        let pair = new LonePair(this);
+
+        this.lone_pairs.push(pair);
+    }
+
+    destroy() {
+        this.remove();
+
+        this.geo.dispose();
+        this.material.dispose();
+
+        this.bonds.forEach(bond => bond.destroy());
+        this.lone_pairs.forEach(pair => pair.destroy());
+    }
+
+    removeLonePair() {
+
     }
 }
 
@@ -200,7 +243,6 @@ class Bond {
     }
 
     calcP2() {
-        // console.log(this.r * Math.cos(this.theta) * Math.sin(this.phi), this.r * Math.sin(this.theta) * Math.sin(this.phi), this.r * Math.cos(this.phi));
         this.p2.pos = this.p1.pos.add(this.r * Math.cos(this.theta) * Math.sin(this.phi), this.r * Math.sin(this.theta) * Math.sin(this.phi), this.r * Math.cos(this.phi));
         this.p2.updateMeshCoords();
         this.updateMeshCoords();
@@ -217,7 +259,16 @@ class Bond {
 
     remove() {
         this.scene.remove(this.mesh);
-        this.scene = null;
+        this.scene = undefined;
+    }
+
+    destroy() {
+        this.remove();
+
+        [this.p1bmat,
+            this.p2bmat,
+            this.p1bgeo,
+            this.p2bgeo].forEach(object => object.dispose());
     }
 
     setVis(vis) {
@@ -272,16 +323,22 @@ class LonePair {
         this.updateMeshCoords();
     }
 
+    destroy() {
+        this.remove();
+
+        this.geo.dispose();
+    }
+
     get x() {
-        return this.parent.x + this.r * Math.cos(this.theta) * Math.sin(this.phi);
+        return this.parent.pos.x + this.r * Math.cos(this.theta) * Math.sin(this.phi);
     }
 
     get y() {
-        return this.parent.y + this.r * Math.sin(this.theta) * Math.sin(this.phi);
+        return this.parent.pos.y + this.r * Math.sin(this.theta) * Math.sin(this.phi);
     }
 
     get z() {
-        return this.parent.z + this.r * Math.cos(this.phi);
+        return this.parent.pos.z + this.r * Math.cos(this.phi);
     }
 
     setVis(vis) {
@@ -346,9 +403,15 @@ window.addEventListener("resize", () => {
 
 let iodine = new Atom("O");
 iodine.addTo(scene);
+<<<<<<< HEAD
 // let lp = new LonePair(iodine);
 // lp.addTo(scene);
 let fluorine = new Atom("H");
+=======
+let lp = new LonePair(iodine);
+lp.addTo(scene);
+let fluorine = new Atom("F");
+>>>>>>> 670add048c1fd979030b5798cac3d5f170b43f83
 fluorine.addTo(scene);
 fluorine.bond(iodine).addTo(scene);
 fluorine.setVis(1);
