@@ -135,6 +135,7 @@ class Atom {
 
         this.scene = scene;
         scene.add(this.mesh);
+        this.lone_pairs.forEach(pair => pair.addTo(scene));
     }
 
     remove() {
@@ -198,6 +199,10 @@ class Atom {
         let pair = new LonePair(this);
 
         this.lone_pairs.push(pair);
+        if (this.scene)
+            pair.addTo(this.scene);
+
+        return pair;
     }
 
     destroy() {
@@ -301,13 +306,25 @@ class Bond {
         this.mesh.applyQuaternion(quaternion);
         this.mesh.position.set(p1.x, p1.y, p1.z);
     }
+
+    get x() {
+        return this.p2.pos.x;
+    }
+
+    get y() {
+        return this.p2.pos.y;
+    }
+
+    get z() {
+        return this.p2.pos.z;
+    }
 }
 
 class LonePair {
     constructor(parent_atom) {
         this.parent = parent_atom;
 
-        this.r = this.parent.element.cov_r;
+        this.r = this.parent.element.cov_r * 1;
         this.theta = 0;
         this.phi = 0;
 
@@ -358,6 +375,21 @@ class LonePair {
     updateMeshCoords() {
         let p = this.mesh.position;
         p.x = this.x; p.y = this.y; p.z = this.z;
+
+        var quaternion = new THREE.Quaternion();
+        let p1 = p;
+        let p2 = this.parent.pos;
+
+        quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(p2.x - p1.x, p2.y - p1.y, p2.z - p1.z).normalize());
+
+        let r = this.mesh.rotation;
+
+        r.x = 0;
+        r.y = 0;
+        r.z = 0;
+
+        this.mesh.applyQuaternion(quaternion);
+        // this.mesh.position.set(p1.x, p1.y, p1.z);
     }
 
     addTo(scene) {
@@ -372,6 +404,10 @@ class LonePair {
     remove() {
         this.scene.remove(this.mesh);
         this.scene = null;
+    }
+
+    get isLonePair() {
+        return true;
     }
 }
 
@@ -399,25 +435,149 @@ window.addEventListener("resize", () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-let iodine = new Atom("I");
-iodine.addTo(scene);
-let lp = new LonePair(iodine);
-lp.addTo(scene);
-let fluorine = new Atom("F");
-fluorine.addTo(scene);
-fluorine.bond(iodine).addTo(scene);
-fluorine.setVis(1);
-iodine.setVis(1);
+let param1 = .1;
+let param2 = 1;
+let param3 = 2;
+
+class Molecule {
+    constructor() {
+        this.atoms = [];
+        this.group = new THREE.Group();
+    }
+
+    newAtom(...args) {
+        let atom = new Atom(...args);
+        this.atoms.push(atom);
+        atom.addTo(this.group);
+        return atom;
+    }
+
+    destroy() {
+        this.remove();
+
+        for (let i = 0; i < this.atoms.length; i++) {
+            this.atoms[i].destroy();
+        }
+    }
+
+    addTo(scene) {
+        if (!this.scene && scene.getObjectByName(this.id)) {
+            return;
+        }
+
+        this.scene = scene;
+        scene.add(this.group);
+    }
+
+    remove() {
+        this.scene.remove(this.group);
+        this.scene = null;
+    }
+
+    setVis(atom_vis, lp_vis = atom_vis) {
+        this.atoms.forEach(atom => { atom.setVis(atom_vis); atom.bonds.forEach(bond => bond.setVis(atom_vis)); atom.lone_pairs.forEach(pair => pair.setVis(lp_vis)); });
+    }
+
+    static get jiggleAmount() {
+        return 0.1;
+    }
+
+    jiggle(amt = FIRST_JIGGLE_AMOUNT) {
+        let atoms = this.atoms;
+
+        for (let i = 0; i < atoms.length; i++) {
+            let atom = atoms[i];
+
+            let eggs = atom.lone_pairs.concat(atom.bonds);
+
+            for (let i = 0; i < eggs.length; i++) {
+                eggs[i].theta += (Math.random() - .5) * amt;
+                eggs[i].phi += (Math.random() - .5) * amt;
+            }
+
+            atom.updateMeshCoords();
+        }
+    }
+
+    physicalSimStep(speed = 1e6) {
+        let atoms = this.atoms;
+        let total_force = 0;
+
+        for (let i = 0; i < atoms.length; i++) {
+            let atom = atoms[i];
+
+            let eggs = atom.lone_pairs.concat(atom.bonds);
+
+            for (let i = 0; i < eggs.length; i++) {
+                let egg = eggs[i];
+                let m_x = 0, m_y = 0, m_z = 0;
+
+                let x = egg.x, y = egg.y, z = egg.z;
+                let isLP = !!egg.isLonePair;
+
+                for (let j = 0; j < eggs.length; j++) {
+                    if (j === i) continue;
+
+                    let m = eggs[j];
+
+                    let mx = m.x, my = m.y, mz = m.z;
+
+                    let r = Math.hypot(mx-x, my-y, mz-z);
+                    let force = Math.min(speed / (Math.pow(r, param3)) * (param2 + param1 * Math.abs(isLP - !!m.isLonePair)), 50);
+
+                    total_force += force;
+
+                    m_x += force * (x - mx);
+                    m_y += force * (y - my);
+                    m_z += force * (z - mz);
+                }
+
+                x += m_x - atom.pos.x;
+                y += m_y - atom.pos.y;
+                z += m_z - atom.pos.z;
+
+                let r = Math.hypot(x, y, z);
+
+                egg.phi = Math.acos(z / r);
+                egg.theta = Math.atan2(y, x);
+
+            }
+
+            atom.updateMeshCoords();
+        }
+
+        console.log(total_force);
+    }
+}
+
+const FIRST_JIGGLE_AMOUNT = 3;
+const LESSER_JIGGLE = 0.02;
+
+let molecule = new Molecule();
+molecule.addTo(scene);
+let oxygen = molecule.newAtom("S");
+let bromine = molecule.newAtom("F");
+let iodine = molecule.newAtom("F");
+let egg = molecule.newAtom("F");
+let egg2 = molecule.newAtom("F");
+
+oxygen.bond(bromine);
+oxygen.bond(iodine);
+oxygen.bond(egg);
+oxygen.bond(egg2);
+
+[0].map(() => oxygen.addLonePair());
+[0,0,0].map(() => {[iodine, bromine, egg, egg2].forEach(atom => atom.addLonePair())});
+
+molecule.jiggle();
 
 function animate() {
     requestAnimationFrame(animate);
 
     controls.update();
-    fluorine.bonds[0].theta += .01;
-    fluorine.bonds[0].phi += .01;
-    fluorine.updateMeshCoords();
 
+    molecule.physicalSimStep();
     renderer.render(scene, camera);
 }
 
-animate();
+animate(); molecule.setVis(0);
